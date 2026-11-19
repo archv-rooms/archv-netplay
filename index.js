@@ -198,8 +198,29 @@ function makeServer(port, startIO) {
             nofusers = io.engine.clientsCount;
             let url = socket.handshake.url;
             let args = transformArgs(url);
+
+            // MUDANCA 2: se o emulador mandou dados no campo "auth", junta com os do endereco
+            const authData = socket.handshake.auth || {};
+            for (const k of Object.keys(authData)) {
+                if (args[k] === undefined) {
+                    args[k] = (typeof authData[k] === 'string') ? authData[k] : JSON.stringify(authData[k]);
+                }
+            }
+
+            // MUDANCA 3: mostra no log o que chegou (sem senha)
+            console.log("Nova conexao:", url, "| campos em auth:", Object.keys(authData));
+            console.log("Campos lidos:", Object.keys(args));
+
             let room = null;
-            let extraData = JSON.parse(args.extra);
+
+            // MUDANCA 1: protecao para o servidor nao cair se "extra" vier vazio
+            let extraData = {};
+            try {
+                extraData = JSON.parse(args.extra);
+            } catch (e) {
+                console.log("Aviso: 'extra' ausente ou invalido. Valor recebido:", String(args.extra));
+            }
+            if (!extraData || typeof extraData !== 'object') extraData = {};
 
             function disconnect() {
                 nofusers = io.engine.clientsCount;
@@ -239,6 +260,8 @@ function makeServer(port, startIO) {
                 if (typeof cb === 'function') cb(true);
             })
             socket.on('open-room', function(data, cb) {
+                // MUDANCA 3: mostra so os nomes dos campos recebidos (sem valores, sem senha)
+                console.log("open-room recebido. Campos:", Object.keys(data || {}), "| campos de extra:", Object.keys((data && data.extra) || {}));
                 room = new Room(data.extra.domain, data.extra.game_id, args.sessionid, data.extra.room_name, args.maxParticipantsAllowed, 1, data.password.trim(), args.userid, socket, data.extra, args.coreVer);
                 global.rooms.push(room);
                 extraData = data.extra;
